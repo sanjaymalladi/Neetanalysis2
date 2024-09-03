@@ -3,57 +3,68 @@ import pandas as pd
 import pdfplumber
 import os
 
-# File path setup
-current_dir = os.path.dirname(__file__)  # Gets the directory of the current script
-pdf_path = os.path.join(current_dir, "MBBS_BDSCQ_EligibleProvisionalMeritList (2).pdf")
+# Load the CSV file
+file_path = 'output_final.csv'
+df = pd.read_csv(file_path)
 
-# Extract data from PDF
-def extract_data_from_pdf(pdf_path):
-    with pdfplumber.open(pdf_path) as pdf:
-        data = []
-        for page in pdf.pages:
-            table = page.extract_table()
-            if table:
-                for row in table[1:]:  # Skip header
-                    data.append(row)
-        return data
+# Set up the page configuration
+st.set_page_config(page_title="Candidate Filter", layout="wide", initial_sidebar_state="expanded")
 
-# Load data from PDF
-raw_data = extract_data_from_pdf(pdf_path)
+# Function to apply filters to the dataframe
+def apply_filters(df):
+    filtered_df = df.copy()
+    
+    # Add score filter
+    min_score, max_score = st.sidebar.slider(
+        "Filter by Score",
+        min_value=float(df['NEET Score'].min()),
+        max_value=float(df['NEET Score'].max()),
+        value=(float(df['NEET Score'].min()), float(df['NEET Score'].max()))
+    )
+    filtered_df = filtered_df[(filtered_df['NEET Score'] >= min_score) & (filtered_df['NEET Score'] <= max_score)]
+    
+    # Create filters for each column if applicable
+    for column in df.columns:
+        if column != 'NEET Score':  # Skip 'Score' as we've already handled it
+            unique_values = df[column].dropna().unique()
+            if len(unique_values) < 50:  # Filter only if unique values are manageable
+                selected_values = st.sidebar.multiselect(f"Filter by {column}", unique_values)
+                if selected_values:
+                    filtered_df = filtered_df[filtered_df[column].isin(selected_values)]
+    
+    return filtered_df
 
-# Convert data to DataFrame
-columns = ["S.No", "NEET Roll No", "NEET Rank", "NEET Score", "Name", "Gender", "Category", "Area", "Muslim Minority", "Anglo Indian", "EWS"]
-df = pd.DataFrame(raw_data, columns=columns)
+# Apply filters
+st.sidebar.header("Filters")
+filtered_df = apply_filters(df)
 
-# Convert relevant columns to proper types
-df["NEET Score"] = pd.to_numeric(df["NEET Score"], errors='coerce')
-df["NEET Rank"] = pd.to_numeric(df["NEET Rank"], errors='coerce')
+# Display the total number of candidates based on the selected filters
+total_candidates = filtered_df.shape[0]
+st.header(f"Total Number of Candidates: {total_candidates}")
 
-# Streamlit app
-st.set_page_config(page_title="Candidate Filter", layout="wide", theme="dark")
+# Display relevant demographics
+st.subheader("Demographics")
 
-st.title("MBBS & BDS Candidates Filter")
+# Gender distribution
+gender_distribution = filtered_df['Gender'].value_counts()
+st.bar_chart(gender_distribution)
 
-# Sidebar filters
-gender_filter = st.sidebar.multiselect("Gender", options=df["Gender"].unique(), default=df["Gender"].unique())
-category_filter = st.sidebar.multiselect("Category", options=df["Category"].unique(), default=df["Category"].unique())
-area_filter = st.sidebar.multiselect("Area", options=df["Area"].unique(), default=df["Area"].unique())
-muslim_minority_filter = st.sidebar.multiselect("Muslim Minority", options=df["Muslim Minority"].unique(), default=df["Muslim Minority"].unique())
-anglo_indian_filter = st.sidebar.multiselect("Anglo Indian", options=df["Anglo Indian"].unique(), default=df["Anglo Indian"].unique())
-ews_filter = st.sidebar.multiselect("EWS", options=df["EWS"].unique(), default=df["EWS"].unique())
+# Category distribution
+category_distribution = filtered_df['Category'].value_counts()
+st.bar_chart(category_distribution)
 
-# Filter the DataFrame
-filtered_df = df[
-    (df["Gender"].isin(gender_filter)) &
-    (df["Category"].isin(category_filter)) &
-    (df["Area"].isin(area_filter)) &
-    (df["Muslim Minority"].isin(muslim_minority_filter)) &
-    (df["Anglo Indian"].isin(anglo_indian_filter)) &
-    (df["EWS"].isin(ews_filter))
-]
+# Area distribution
+area_distribution = filtered_df['Area'].value_counts()
+st.bar_chart(area_distribution)
 
-# Display the number of candidates
-st.write(f"Total Number of Candidates: {filtered_df.shape[0]}")
+# Muslim Minority distribution
+muslim_minority_distribution = filtered_df['Muslim Minority'].value_counts()
+st.bar_chart(muslim_minority_distribution)
 
-# Optional: Display the filtered DataFrame
-# st.write(filtered_df)
+# Anglo Indian distribution
+anglo_indian_distribution = filtered_df['Anglo Indian'].value_counts()
+st.bar_chart(anglo_indian_distribution)
+
+# EWS distribution
+ews_distribution = filtered_df['EWS'].value_counts()
+st.bar_chart(ews_distribution)
